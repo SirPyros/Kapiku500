@@ -8,11 +8,14 @@ import org.anddev.andengine.engine.camera.Camera;
 import org.anddev.andengine.engine.options.EngineOptions;
 import org.anddev.andengine.engine.options.EngineOptions.ScreenOrientation;
 import org.anddev.andengine.engine.options.resolutionpolicy.RatioResolutionPolicy;
+import org.anddev.andengine.entity.primitive.Rectangle;
 import org.anddev.andengine.entity.scene.Scene;
+import org.anddev.andengine.entity.scene.Scene.IOnSceneTouchListener;
 import org.anddev.andengine.entity.scene.background.ColorBackground;
 import org.anddev.andengine.entity.sprite.Sprite;
 import org.anddev.andengine.entity.text.Text;
 import org.anddev.andengine.entity.util.FPSLogger;
+import org.anddev.andengine.input.touch.TouchEvent;
 import org.anddev.andengine.opengl.font.Font;
 import org.anddev.andengine.opengl.texture.TextureOptions;
 import org.anddev.andengine.opengl.texture.atlas.bitmap.BitmapTextureAtlas;
@@ -26,22 +29,24 @@ import org.danv.kapiku500.engine.HumanPlayer;
 import org.danv.kapiku500.engine.IPlayer;
 import org.danv.kapiku500.ui.CoordinateInfo;
 import org.danv.kapiku500.ui.Coordinates;
+import org.danv.kapiku500.ui.DisplayUnit;
 
 import android.app.Activity;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.TextView;
 
-public class Kapiku500HDActivity extends BaseGameActivity {
+public class Kapiku500HDActivity extends BaseGameActivity implements IOnSceneTouchListener {
 	// ===========================================================
 		// Constants
 		// ===========================================================
 		private static final int CAMERA_WIDTH = 1280;
 		private static final int CAMERA_HEIGHT = 800;
-		private static final int MENU_TRACE = Menu.FIRST;
+		private static final Rect BOARD_AREA = new Rect(200, 200, CAMERA_WIDTH - 400, CAMERA_HEIGHT - 400); 
 		private static final int BONE_HEIGHT = 128;
 		private static final int BONE_WIDTH = 64;
 
@@ -51,10 +56,12 @@ public class Kapiku500HDActivity extends BaseGameActivity {
 		private Camera mCamera;
 		private BitmapTextureAtlas mBitmapTextureAtlas;		
 		private Game mGame;
-		private IPlayer[] mPlayers;
-		private Map<String, TextureRegion> dominoTextures;
+		private IPlayer[] mPlayers;		
+		private Map<String, DisplayUnit> dominoDisplay;
 		private BitmapTextureAtlas mFontTexture;
 		private Font mFont;
+		private boolean mGrabbed = false;
+		private int mPlayerSetupIdx = 0;
 		// ===========================================================
 		// Constructors
 		// ===========================================================
@@ -79,13 +86,14 @@ public class Kapiku500HDActivity extends BaseGameActivity {
 			this.mBitmapTextureAtlas = new BitmapTextureAtlas(2048, BONE_HEIGHT, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
 			BitmapTextureAtlasTextureRegionFactory.setAssetBasePath("gfx/");
 			Bone[] bones = mGame.getDeck().getBones();
-			dominoTextures = new HashMap<String, TextureRegion>();
+			dominoDisplay = new HashMap<String, DisplayUnit>();
 			int idx = 0;
 			for(Bone bone : bones)
 			{
-				dominoTextures.put(bone.toString(), 
-						BitmapTextureAtlasTextureRegionFactory.createFromAsset(
-								this.mBitmapTextureAtlas, this, bone.toString() + ".png", idx*BONE_WIDTH, 0));
+				dominoDisplay.put(bone.toString(), 
+						new DisplayUnit(new Coordinates(), 
+								BitmapTextureAtlasTextureRegionFactory.createFromAsset(
+										this.mBitmapTextureAtlas, this, bone.toString() + ".png", idx*BONE_WIDTH, 0)));				
 				idx++;				
 			}
 			
@@ -104,17 +112,18 @@ public class Kapiku500HDActivity extends BaseGameActivity {
 			this.mEngine.registerUpdateHandler(new FPSLogger());
 
 			final Scene scene = new Scene();
+			scene.setOnAreaTouchTraversalFrontToBack();
 			scene.setBackground(new ColorBackground(0.09804f, 0.6274f, 0.8784f));
-
+			
 			/* Calculate the coordinates for the face, so its centered on the camera. */			
-			int idx = 0;
+			mPlayerSetupIdx = 0;
 			for(IPlayer player : mPlayers)
 	        {
 				CoordinateInfo X = new CoordinateInfo();
 				CoordinateInfo Y = new CoordinateInfo();				
 				
 				float pRotation = 0;
-				switch(idx)
+				switch(mPlayerSetupIdx)
 				{
 					case 0:
 						X.Text = CAMERA_WIDTH / 2;
@@ -154,16 +163,47 @@ public class Kapiku500HDActivity extends BaseGameActivity {
 	        	Bone[] bones = player.getHand().getBones();
 	        	for(Bone bone : bones)
 	        	{
-	        		final Sprite face = new Sprite(X.Position, Y.Position, dominoTextures.get(bone.toString()));
+	        		DisplayUnit boneDisplay = dominoDisplay.get(bone.toString());
+	        		boneDisplay.setCoordinates(X.Position, Y.Position);
+	        		final Sprite face = new Sprite(X.Position, Y.Position, boneDisplay.getTexture()) {
+	        			int playerIdx = mPlayerSetupIdx;
+	        			@Override
+	        			public boolean onAreaTouched(final TouchEvent pSceneTouchEvent, final float pTouchAreaLocalX, final float pTouchAreaLocalY) {
+	        				if(mGame.getCurrentPlayerIndex() != playerIdx)
+	        					return true;
+	        				switch(pSceneTouchEvent.getAction()) {
+		    					case TouchEvent.ACTION_DOWN:
+		    						if(!mGrabbed)
+		    						{
+			    						this.setScale(1.25f);
+			    						mGrabbed = true;
+		    						}
+		    						break;
+		    					case TouchEvent.ACTION_MOVE:
+		    						if(mGrabbed) {
+		    							this.setPosition(pSceneTouchEvent.getX() - this.getWidth() / 2, pSceneTouchEvent.getY() - this.getHeight() / 2);
+		    						}
+		    						break;
+		    					case TouchEvent.ACTION_UP:
+		    						if(mGrabbed) {
+		    							mGrabbed = false;
+		    							this.setScale(1.0f);
+		    						}
+		    						break;
+		    				}
+		    				return true;
+	        			}
+	        		};
 	        		face.setRotation(pRotation);
 	        		scene.attachChild(face);
+	        		scene.registerTouchArea(face);	        		
 	        		X.increasePosition(BONE_WIDTH);
 	        		Y.increasePosition(BONE_WIDTH);
 	        	}	        		
 				
-    			idx++;
+	        	mPlayerSetupIdx++;
 	        }
-			
+			scene.setTouchAreaBindingEnabled(true);
 			return scene;
 		}
 
@@ -171,32 +211,12 @@ public class Kapiku500HDActivity extends BaseGameActivity {
 		public void onLoadComplete() {
 
 		}
-
+		
 		@Override
-		public boolean onCreateOptionsMenu(final Menu pMenu) {
-			pMenu.add(Menu.NONE, MENU_TRACE, Menu.NONE, "Start Method Tracing");
-			return super.onCreateOptionsMenu(pMenu);
-		}
-
-		@Override
-		public boolean onPrepareOptionsMenu(final Menu pMenu) {
-			pMenu.findItem(MENU_TRACE).setTitle(this.mEngine.isMethodTracing() ? "Stop Method Tracing" : "Start Method Tracing");
-			return super.onPrepareOptionsMenu(pMenu);
-		}
-
-		@Override
-		public boolean onMenuItemSelected(final int pFeatureId, final MenuItem pItem) {
-			switch(pItem.getItemId()) {
-				case MENU_TRACE:
-					if(this.mEngine.isMethodTracing()) {
-						this.mEngine.stopMethodTracing();
-					} else {
-						this.mEngine.startMethodTracing("AndEngine_" + System.currentTimeMillis() + ".trace");
-					}
-					return true;
-				default:
-					return super.onMenuItemSelected(pFeatureId, pItem);
-			}
+		public boolean onSceneTouchEvent(Scene pScene,
+				TouchEvent pSceneTouchEvent) {
+			// TODO Auto-generated method stub
+			return false;
 		}
 
 		// ===========================================================
@@ -211,9 +231,13 @@ public class Kapiku500HDActivity extends BaseGameActivity {
 	        
 	        mGame.newGame(mPlayers);
 		}
+		
+		
 		// ===========================================================
 		// Inner and Anonymous Classes
 		// ===========================================================
+
+		
 		
 		
     

@@ -1,32 +1,17 @@
 package org.danv.kapiku500.ui;
 
 public class Coordinates {
-	 private CoordinateInfo mX;
-	 private CoordinateInfo mY;
-	 
-	 public CoordinateInfo getXInfo()
-	 {
-		 return mX;
-	 }
-	 public CoordinateInfo getYInfo()
-	 {
-		 return mY;
-	 }
-	 
+	 private float mX;
+	 private float mY;
+	 	 
 	 public float getX()
 	 {
-		 return mX.Position;
+		 return mX;
 	 }
 	 
 	 public float getY()
 	 {
-		 return mY.Position;
-	 }
-	 
-	 public Coordinates(CoordinateInfo x, CoordinateInfo y)
-	 {
-		 mX = x;
-		 mY = y;
+		 return mY;
 	 }
 	 
 	 public Coordinates ()
@@ -36,7 +21,17 @@ public class Coordinates {
 	 
 	 public Coordinates (float x, float y)
 	 {
-		 mX = new CoordinateInfo(x, 0, 0);
-		 mY = new CoordinateInfo(y, 0, 0);
+		 mX = x;
+		 mY = y;
+	 }
+	 
+	 public void setX(float x)
+	 {
+		 mX = x;
+	 }
+	 
+	 public void setY(float y)
+	 {
+		 mY = y;
 	 }
 }

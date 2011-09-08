@@ -20,4 +20,10 @@ public class DisplayUnit {
 	{
 		return mTexture;
 	}
+	
+	public void setCoordinates(float x, float y)
+	{
+		mCoord.setX(x);
+		mCoord.setY(y);
+	}
 }
